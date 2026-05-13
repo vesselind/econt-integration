@@ -7,13 +7,14 @@ namespace Econt\EcontApi\Client;
 use Econt\EcontApi\Configuration\EcontConfiguration;
 use Econt\EcontApi\Exception\EcontApiException;
 use Econt\EcontApi\Exception\EcontNetworkException;
-use Econt\EcontApi\Model\AbstractModel;
 use Econt\EcontApi\Model\Response\EcontResponse;
+use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\HttpClient\Psr18Client;
 use Symfony\Component\Serializer\SerializerInterface;
 
 class EcontClient implements EcontClientInterface
@@ -28,17 +29,27 @@ class EcontClient implements EcontClientInterface
     public function __construct(
         EcontConfiguration $configuration,
         ClientInterface $httpClient,
-        RequestFactoryInterface $requestFactory,
-        StreamFactoryInterface $streamFactory,
         SerializerInterface $serializer,
         ?LoggerInterface $logger = null
     ) {
         $this->configuration = $configuration;
         $this->httpClient = $httpClient;
-        $this->requestFactory = $requestFactory;
-        $this->streamFactory = $streamFactory;
         $this->serializer = $serializer;
         $this->logger = $logger ?? new NullLogger();
+
+        $psr17Factory = new Psr17Factory();
+        $this->requestFactory = $psr17Factory;
+        $this->streamFactory = $psr17Factory;
+    }
+
+    public static function create(
+        EcontConfiguration $configuration,
+        SerializerInterface $serializer,
+        ?LoggerInterface $logger = null
+    ): self {
+        $httpClient = new Psr18Client();
+
+        return new self($configuration, $httpClient, $serializer, $logger);
     }
 
     public function request(string $service, array $data = []): EcontResponse
@@ -192,40 +203,6 @@ class EcontClient implements EcontClientInterface
 
         if ($element->getName() === 'item' && isset($element['key'])) {
             return [$element['key'] => $result];
-        }
-
-        return $result;
-    }
-
-    private function prepareRequestData(array $data): array
-    {
-        $result = [];
-
-        $result['JSONAttributes'] = [];
-        $result['saveResponse'] = 'true';
-
-        $requestData = [
-            'username' => $this->configuration->getUsername(),
-            'password' => $this->configuration->getPassword(),
-            'language' => $this->configuration->getLanguage(),
-        ];
-
-        foreach ($data as $key => $value) {
-            $requestData[$key] = $value;
-        }
-
-        $result['request'] = $requestData;
-
-        return $result;
-    }
-
-    private function serializeModel(AbstractModel $model): array
-    {
-        $array = $model->toArray();
-        $result = [];
-
-        foreach ($array as $key => $value) {
-            $result[$key] = $value;
         }
 
         return $result;

@@ -7,8 +7,6 @@ namespace Econt\EcontApi\Client;
 use Econt\EcontApi\Configuration\EcontConfiguration;
 use Econt\EcontApi\Model\Response\EcontResponse;
 use Psr\Http\Client\ClientInterface;
-use Psr\Http\Message\RequestFactoryInterface;
-use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Serializer\SerializerInterface;

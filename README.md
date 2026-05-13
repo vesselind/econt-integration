@@ -67,15 +67,23 @@ use Econt\EcontApi\Client\EcontClient;
 use Symfony\Component\Serializer\Serializer;
 use Symfony\Component\Serializer\Encoder\XmlEncoder;
 use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
-use Symfony\Component\HttpClient\Psr18Client;
-
-// Create HTTP client (any PSR-18 compatible)
-$httpClient = new Psr18Client();
 
 // Create serializer
 $serializer = new Serializer([new ObjectNormalizer()], [new XmlEncoder()]);
 
-// Create Econt client
+// Create Econt client (HTTP client is created internally)
+$client = EcontClient::create($config, $serializer);
+```
+
+Or, if you want to provide your own PSR-18 HTTP client:
+
+```php
+use Symfony\Component\HttpClient\Psr18Client;
+
+// Create your own HTTP client
+$httpClient = new Psr18Client();
+
+// Create Econt client with custom HTTP client
 $client = new EcontClient($config, $httpClient, $serializer);
 ```
 
