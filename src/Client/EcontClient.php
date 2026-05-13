@@ -58,24 +58,24 @@ class EcontClient implements EcontClientInterface
 
         $request = $this->requestFactory->createRequest('POST', $this->configuration->getBaseUrl() . $service)
             ->withHeader('Content-Type', 'text/xml; charset=utf-8')
-            ->withHeader('Accept', 'application/xml');
+            ->withHeader('Accept', 'application/xml')
+            ->withHeader('Authorization', $this->getBasicAuthHeader());
 
         $request->getBody()->write($xmlData);
 
-        $this->logger->info("Econt API Request: {$service}", ['xml' => $xmlData]);
-
         try {
             $response = $this->httpClient->sendRequest($request);
+            $statusCode = $response->getStatusCode();
             $responseBody = (string) $response->getBody();
 
-            $this->logger->debug("Econt API Response: {$service}", ['response' => $responseBody]);
+            if (empty($responseBody)) {
+                return EcontResponse::error("Empty response body with status code: $statusCode");
+            }
 
             return $this->parseXmlResponse($responseBody);
         } catch (\Psr\Http\Client\NetworkExceptionInterface $e) {
-            $this->logger->error("Econt Network Error: {$service}", ['exception' => $e->getMessage()]);
             throw new EcontNetworkException('Network error occurred: ' . $e->getMessage(), 0, $e);
         } catch (\Throwable $e) {
-            $this->logger->error("Econt Request Error: {$service}", ['exception' => $e->getMessage()]);
             throw new EcontApiException(null, null, 'Request failed: ' . $e->getMessage(), 0, $e);
         }
     }
@@ -90,12 +90,16 @@ class EcontClient implements EcontClientInterface
         return $this->serializer;
     }
 
+    private function getBasicAuthHeader(): string
+    {
+        $credentials = $this->configuration->getUsername() . ':' . $this->configuration->getPassword();
+        return 'Basic ' . base64_encode($credentials);
+    }
+
     private function buildRequestXml(array $data): string
     {
         $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><request/>');
 
-        $xml->addChild('username', $this->configuration->getUsername());
-        $xml->addChild('password', $this->configuration->getPassword());
         $xml->addChild('language', $this->configuration->getLanguage());
 
         $this->arrayToXmlRecursive($xml, $data);
