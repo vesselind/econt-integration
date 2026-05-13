@@ -143,8 +143,8 @@ use Econt\EcontApi\Model\Location\City;
 use Econt\EcontApi\Model\Location\Country;
 
 $address = new Address(
-    city: new City(
-        country:  new Country(code2: 'BG', code3: 'BGR', name: 'България', nameEn: 'Bulgaria'),
+    city: City::create(
+        country:  Country::bulgaria(),
         postCode: '7000',
         name:     'Русе',
         nameEn:   'Ruse',
@@ -252,6 +252,25 @@ $client->shipment()->requestCourier($request);
 | `ReturnInstructionParams` | `Model\Shipment` | Return instructions configuration |
 | `PackingListElement` | `Model\Shipment` | Item in a packing list |
 | `PriceResult` | `Model\Result` | Calculated price with currency |
+
+### Country Factory Methods
+
+`Country` ships with built-in factories for the most common Econt markets:
+
+```php
+$bg = Country::bulgaria();  // BG / BGR
+$ro = Country::romania();   // RO / ROU
+$gr = Country::greece();    // GR / GRC
+
+// Generic factory for any other country (id defaults to null)
+$de = Country::create(code2: 'DE', code3: 'DEU', nameEn: 'Germany');
+```
+
+Use them anywhere a `Country` instance is needed — for example when building a `City` for a request payload:
+
+```php
+$city = City::create(country: Country::bulgaria(), postCode: '1000', name: 'София', nameEn: 'Sofia');
+```
 
 ### Enums
 

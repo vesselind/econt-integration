@@ -49,6 +49,34 @@ class Country
         return $this->isEU;
     }
 
+    public static function bulgaria(): self
+    {
+        return self::create(code2: 'BG', code3: 'BGR', name: 'България', nameEn: 'Bulgaria');
+    }
+
+    public static function romania(): self
+    {
+        return self::create(code2: 'RO', code3: 'ROU', name: 'Румъния', nameEn: 'Romania');
+    }
+
+    public static function greece(): self
+    {
+        return self::create(code2: 'GR', code3: 'GRC', name: 'Гърция', nameEn: 'Greece');
+    }
+
+    /**
+     * Creates a Country without a known API id — useful for building request payloads.
+     */
+    public static function create(
+        string $code2,
+        string $code3,
+        ?string $name = null,
+        ?string $nameEn = null,
+        ?bool $isEU = null,
+    ): self {
+        return new self(id: null, code2: $code2, code3: $code3, name: $name, nameEn: $nameEn, isEU: $isEU);
+    }
+
     /**
      * @param array<string, mixed> $data
      */

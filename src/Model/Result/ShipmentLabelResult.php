@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace Econt\EcontApi\Model\Result;
 
 /**
- * Result of createLabel / validateLabel operations.
+ * Result of createLabel / validateLabel / updateLabel operations.
+ * The full label data is available via getLabel().
  */
 class ShipmentLabelResult
 {
-    /**
-     * @param array<string, mixed> $rawResponse
-     */
     public function __construct(
         private readonly string $waybillNumber,
-        private readonly ?PriceCalculationResult $price,
-        private readonly array $rawResponse,
+        private readonly ?LabelDetails $label,
+        private readonly ?string $blockingPaymentUrl,
+        private readonly ?string $courierRequestId,
+        private readonly ?bool $payAfterAcceptIgnored,
+        private readonly string $delayedDeliveryWarning,
+        private readonly string $delayedRequestWarning,
     ) {
     }
 
@@ -24,17 +26,34 @@ class ShipmentLabelResult
         return $this->waybillNumber;
     }
 
-    public function getPrice(): ?PriceCalculationResult
+    public function getLabel(): ?LabelDetails
     {
-        return $this->price;
+        return $this->label;
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function getRawResponse(): array
+    public function getBlockingPaymentUrl(): ?string
     {
-        return $this->rawResponse;
+        return $this->blockingPaymentUrl;
+    }
+
+    public function getCourierRequestId(): ?string
+    {
+        return $this->courierRequestId;
+    }
+
+    public function isPayAfterAcceptIgnored(): ?bool
+    {
+        return $this->payAfterAcceptIgnored;
+    }
+
+    public function getDelayedDeliveryWarning(): string
+    {
+        return $this->delayedDeliveryWarning;
+    }
+
+    public function getDelayedRequestWarning(): string
+    {
+        return $this->delayedRequestWarning;
     }
 
     /**
@@ -42,13 +61,18 @@ class ShipmentLabelResult
      */
     public static function fromArray(array $data): self
     {
-        $label = $data['label'] ?? $data;
-        $priceData = $label['price'] ?? null;
+        $labelData = $data['label'] ?? null;
+        $label = is_array($labelData) ? LabelDetails::fromArray($labelData) : null;
 
         return new self(
-            waybillNumber: (string) ($label['shipmentNumber'] ?? $label['waybillNumber'] ?? ''),
-            price: $priceData !== null ? PriceCalculationResult::fromArray((array) $priceData) : null,
-            rawResponse: $data,
+            waybillNumber: (string) ($labelData['shipmentNumber'] ?? $labelData['waybillNumber'] ?? ''),
+            label: $label,
+            blockingPaymentUrl: isset($data['blockingPaymentURL']) ? (string) $data['blockingPaymentURL'] : null,
+            courierRequestId: isset($data['courierRequestID']) ? (string) $data['courierRequestID'] : null,
+            payAfterAcceptIgnored: isset($data['payAfterAcceptIgnored'])
+                ? (bool) $data['payAfterAcceptIgnored'] : null,
+            delayedDeliveryWarning: (string) ($data['delayedDeliveryWarning'] ?? ''),
+            delayedRequestWarning: (string) ($data['delayedRequestWarning'] ?? ''),
         );
     }
 
@@ -58,8 +82,12 @@ class ShipmentLabelResult
     public function toArray(): array
     {
         return [
-            'waybillNumber' => $this->waybillNumber,
-            'price' => $this->price?->toArray(),
+            'label' => $this->label?->toArray(),
+            'blockingPaymentURL' => $this->blockingPaymentUrl,
+            'courierRequestID' => $this->courierRequestId,
+            'payAfterAcceptIgnored' => $this->payAfterAcceptIgnored,
+            'delayedDeliveryWarning' => $this->delayedDeliveryWarning,
+            'delayedRequestWarning' => $this->delayedRequestWarning,
         ];
     }
 }

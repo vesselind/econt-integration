@@ -74,6 +74,34 @@ class City
     }
 
     /**
+     * Creates a City without a known API id — useful for building request payloads.
+     */
+    public static function create(
+        Country $country,
+        string $postCode,
+        string $name,
+        string $nameEn,
+        ?string $regionName = null,
+        ?string $regionNameEn = null,
+        ?string $phoneCode = null,
+        ?GeoLocation $location = null,
+        ?bool $expressCityDeliveries = null,
+    ): self {
+        return new self(
+            id: null,
+            country: $country,
+            postCode: $postCode,
+            name: $name,
+            nameEn: $nameEn,
+            regionName: $regionName,
+            regionNameEn: $regionNameEn,
+            phoneCode: $phoneCode,
+            location: $location,
+            expressCityDeliveries: $expressCityDeliveries,
+        );
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     public static function fromArray(array $data): self
