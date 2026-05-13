@@ -175,6 +175,66 @@ $regularOffices = array_filter(
 );
 ```
 
+### Delivery Routing
+
+The delivery route is determined by which address/office fields you fill in:
+
+| Sender side | Receiver side | `tariffSubCode` |
+|-------------|---------------|-----------------|
+| `senderAddress` | `receiverAddress` | `DOOR_DOOR` |
+| `senderAddress` | `receiverOfficeCode` | `DOOR_OFFICE` |
+| `senderOfficeCode` | `receiverAddress` | `OFFICE_DOOR` |
+| `senderOfficeCode` | `receiverOfficeCode` | `OFFICE_OFFICE` |
+
+> The office code is the `code` field from the `Office` model returned by `getOffices()`.
+
+**Door-to-office (receiver picks up at an Econt office)**
+
+```php
+use Econt\EcontApi\Enum\TariffSubCode;
+
+$label = new ShippingLabel(
+    senderClient:       new ClientProfile(name: 'Иван Иванов', phones: ['0888888888']),
+    receiverClient:     new ClientProfile(name: 'Богдан Богданов', phones: ['0878787878']),
+    packCount:          1,
+    shipmentType:       ShipmentType::PACK,
+    weight:             2.5,
+    senderAddress:      $senderAddress,       // sender's door address
+    receiverOfficeCode: '1127',               // Office::getCode() from getOffices()
+    tariffSubCode:      TariffSubCode::DOOR_OFFICE,
+    shipmentDescription: 'Книги',
+);
+
+$result = $client->shipment()->createLabel($label);
+```
+
+**Office-to-office**
+
+```php
+$label = new ShippingLabel(
+    senderClient:       new ClientProfile(name: 'Иван Иванов', phones: ['0888888888']),
+    receiverClient:     new ClientProfile(name: 'Богдан Богданов', phones: ['0878787878']),
+    packCount:          1,
+    shipmentType:       ShipmentType::PACK,
+    weight:             2.5,
+    senderOfficeCode:   '1034',               // sender drops off at this office
+    receiverOfficeCode: '1127',               // receiver picks up at this office
+    tariffSubCode:      TariffSubCode::OFFICE_OFFICE,
+    shipmentDescription: 'Книги',
+);
+```
+
+**How to find an office code**
+
+```php
+$offices = $client->office()->getOffices(countryCode: 'BGR', cityId: 41);
+foreach ($offices as $office) {
+    echo $office->getCode() . ' — ' . $office->getName() . PHP_EOL;
+}
+```
+
+---
+
 ### Shipment Service — Price Calculation
 
 ```php

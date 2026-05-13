@@ -5,11 +5,18 @@ declare(strict_types=1);
 namespace Econt\EcontApi\Model\Shipment;
 
 use Econt\EcontApi\Enum\ShipmentType;
+use Econt\EcontApi\Enum\TariffSubCode;
 use Econt\EcontApi\Exception\EcontValidationException;
 use Econt\EcontApi\Model\Location\Address;
 
 /**
  * Shipping label – the central entity for creating, validating, and pricing shipments.
+ *
+ * Delivery routing is controlled by a combination of address / office code fields:
+ *   - Door-to-door:   senderAddress + receiverAddress  (tariffSubCode: DOOR_DOOR)
+ *   - Door-to-office: senderAddress + receiverOfficeCode  (tariffSubCode: DOOR_OFFICE)
+ *   - Office-to-door: senderOfficeCode + receiverAddress  (tariffSubCode: OFFICE_DOOR)
+ *   - Office-to-office: senderOfficeCode + receiverOfficeCode  (tariffSubCode: OFFICE_OFFICE)
  */
 class ShippingLabel
 {
@@ -19,12 +26,15 @@ class ShippingLabel
      */
     public function __construct(
         private readonly ClientProfile $senderClient,
-        private readonly Address $senderAddress,
         private readonly ClientProfile $receiverClient,
-        private readonly Address $receiverAddress,
         private readonly int $packCount,
         private readonly ShipmentType $shipmentType,
         private readonly float $weight,
+        private readonly ?Address $senderAddress = null,
+        private readonly ?string $senderOfficeCode = null,
+        private readonly ?Address $receiverAddress = null,
+        private readonly ?string $receiverOfficeCode = null,
+        private readonly ?TariffSubCode $tariffSubCode = null,
         private string $mode = 'create',
         private readonly ?int $envelopeNumbers = null,
         private readonly ?bool $sizeUnder60cm = null,
@@ -52,19 +62,34 @@ class ShippingLabel
         return $this->senderClient;
     }
 
-    public function getSenderAddress(): Address
-    {
-        return $this->senderAddress;
-    }
-
     public function getReceiverClient(): ClientProfile
     {
         return $this->receiverClient;
     }
 
-    public function getReceiverAddress(): Address
+    public function getSenderAddress(): ?Address
+    {
+        return $this->senderAddress;
+    }
+
+    public function getSenderOfficeCode(): ?string
+    {
+        return $this->senderOfficeCode;
+    }
+
+    public function getReceiverAddress(): ?Address
     {
         return $this->receiverAddress;
+    }
+
+    public function getReceiverOfficeCode(): ?string
+    {
+        return $this->receiverOfficeCode;
+    }
+
+    public function getTariffSubCode(): ?TariffSubCode
+    {
+        return $this->tariffSubCode;
     }
 
     public function getPackCount(): int
@@ -208,6 +233,14 @@ class ShippingLabel
             $violations[] = 'weight must be > 0';
         }
 
+        if ($this->senderAddress === null && $this->senderOfficeCode === null) {
+            $violations[] = 'Either senderAddress or senderOfficeCode must be provided';
+        }
+
+        if ($this->receiverAddress === null && $this->receiverOfficeCode === null) {
+            $violations[] = 'Either receiverAddress or receiverOfficeCode must be provided';
+        }
+
         if ($this->shipmentType === ShipmentType::POST_PACK && $this->sizeUnder60cm !== true) {
             $violations[] = 'sizeUnder60cm must be true for POST_PACK shipment type';
         }
@@ -252,34 +285,41 @@ class ShippingLabel
         $shipmentTypeRaw = strtolower((string) ($labelData['shipmentType'] ?? 'pack'));
         $shipmentType = ShipmentType::from($shipmentTypeRaw);
 
+        $tariffSubCode = null;
+        if (isset($labelData['tariffSubCode'])) {
+            $tariffSubCode = TariffSubCode::from((string) $labelData['tariffSubCode']);
+        }
+
         return new self(
             senderClient: ClientProfile::fromArray($labelData['senderClient'] ?? []),
-            senderAddress: Address::fromArray($labelData['senderAddress'] ?? []),
             receiverClient: ClientProfile::fromArray($labelData['receiverClient'] ?? []),
-            receiverAddress: Address::fromArray($labelData['receiverAddress'] ?? []),
             packCount: (int) ($labelData['packCount'] ?? 1),
             shipmentType: $shipmentType,
             weight: (float) ($labelData['weight'] ?? 0.0),
+            senderAddress: isset($labelData['senderAddress']) && is_array($labelData['senderAddress'])
+                ? Address::fromArray($labelData['senderAddress']) : null,
+            senderOfficeCode: isset($labelData['senderOfficeCode'])
+                ? (string) $labelData['senderOfficeCode'] : null,
+            receiverAddress: isset($labelData['receiverAddress']) && is_array($labelData['receiverAddress'])
+                ? Address::fromArray($labelData['receiverAddress']) : null,
+            receiverOfficeCode: isset($labelData['receiverOfficeCode'])
+                ? (string) $labelData['receiverOfficeCode'] : null,
+            tariffSubCode: $tariffSubCode,
             mode: (string) ($data['mode'] ?? $labelData['mode'] ?? 'create'),
             envelopeNumbers: isset($labelData['envelopeNumbers']) ? (int) $labelData['envelopeNumbers'] : null,
             sizeUnder60cm: isset($labelData['sizeUnder60cm']) ? (bool) $labelData['sizeUnder60cm'] : null,
             shipmentDimensionsL: isset($labelData['shipmentDimensionsL'])
-                ? (float) $labelData['shipmentDimensionsL']
-                : null,
+                ? (float) $labelData['shipmentDimensionsL'] : null,
             shipmentDimensionsW: isset($labelData['shipmentDimensionsW'])
-                ? (float) $labelData['shipmentDimensionsW']
-                : null,
+                ? (float) $labelData['shipmentDimensionsW'] : null,
             shipmentDimensionsH: isset($labelData['shipmentDimensionsH'])
-                ? (float) $labelData['shipmentDimensionsH']
-                : null,
+                ? (float) $labelData['shipmentDimensionsH'] : null,
             shipmentDescription: isset($labelData['shipmentDescription'])
-                ? (string) $labelData['shipmentDescription']
-                : null,
+                ? (string) $labelData['shipmentDescription'] : null,
             orderNumber: isset($labelData['orderNumber']) ? (string) $labelData['orderNumber'] : null,
             sendDate: isset($labelData['sendDate']) ? (string) $labelData['sendDate'] : null,
             holidayDeliveryDay: isset($labelData['holidayDeliveryDay'])
-                ? (string) $labelData['holidayDeliveryDay']
-                : null,
+                ? (string) $labelData['holidayDeliveryDay'] : null,
             keepUpright: isset($labelData['keepUpright']) ? (bool) $labelData['keepUpright'] : null,
             payAfterAccept: isset($labelData['payAfterAccept']) ? (bool) $labelData['payAfterAccept'] : null,
             payAfterTest: isset($labelData['payAfterTest']) ? (bool) $labelData['payAfterTest'] : null,
@@ -287,12 +327,10 @@ class ShippingLabel
             packingListType: isset($labelData['packingListType']) ? (string) $labelData['packingListType'] : null,
             packingList: $packingList,
             services: isset($labelData['services']) && is_array($labelData['services'])
-                ? ShippingLabelServices::fromArray($labelData['services'])
-                : null,
+                ? ShippingLabelServices::fromArray($labelData['services']) : null,
             returnInstructions: isset($labelData['returnInstructions'])
                 && is_array($labelData['returnInstructions'])
-                ? ReturnInstructionParams::fromArray($labelData['returnInstructions'])
-                : null,
+                ? ReturnInstructionParams::fromArray($labelData['returnInstructions']) : null,
             instructions: $instructions,
         );
     }
@@ -304,9 +342,12 @@ class ShippingLabel
     {
         return [
             'senderClient' => $this->senderClient->toArray(),
-            'senderAddress' => $this->senderAddress->toArray(),
+            'senderAddress' => $this->senderAddress?->toArray(),
+            'senderOfficeCode' => $this->senderOfficeCode,
             'receiverClient' => $this->receiverClient->toArray(),
-            'receiverAddress' => $this->receiverAddress->toArray(),
+            'receiverAddress' => $this->receiverAddress?->toArray(),
+            'receiverOfficeCode' => $this->receiverOfficeCode,
+            'tariffSubCode' => $this->tariffSubCode?->value,
             'packCount' => $this->packCount,
             'shipmentType' => $this->shipmentType->value,
             'weight' => $this->weight,
