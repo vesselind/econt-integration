@@ -4,316 +4,258 @@ declare(strict_types=1);
 
 namespace Econt\EcontApi\Model\Office;
 
-use Econt\EcontApi\Model\AbstractModel;
+use Econt\EcontApi\Model\Location\Address;
 
-class Office extends AbstractModel
+/**
+ * Econt office (branch) entity.
+ */
+class Office
 {
-    private ?string $officeCode;
-    private ?string $officeName;
-    private ?string $officeNameEn;
-    private ?string $companyName;
-    private ?string $companyNameEn;
-    private ?string $email;
-    private ?string $phone;
-    private ?string $phone2;
-    private ?OfficeAddress $address;
-    private ?array $workHours;
-    private ?bool $isMotorcycle;
-    private ?bool $isDenominated;
-    private ?bool $isCredit;
-    private ?bool $isTakeBackOffice;
-    private ?bool $isBehalfOf;
-    private ?string $workingTime;
-    private ?string $priority;
-    private ?float $maxWeight;
-    private ?float $maxPay;
-
+    /**
+     * @param string[] $phones
+     * @param string[] $emails
+     * @param string[] $shipmentTypes
+     */
     public function __construct(
-        ?string $officeCode = null,
-        ?string $officeName = null,
-        ?string $officeNameEn = null,
-        ?string $companyName = null,
-        ?string $companyNameEn = null,
-        ?string $email = null,
-        ?string $phone = null,
-        ?string $phone2 = null,
-        ?OfficeAddress $address = null,
-        ?array $workHours = null,
-        ?bool $isMotorcycle = null,
-        ?bool $isDenominated = null,
-        ?bool $isCredit = null,
-        ?bool $isTakeBackOffice = null,
-        ?bool $isBehalfOf = null,
-        ?string $workingTime = null,
-        ?string $priority = null,
-        ?float $maxWeight = null,
-        ?float $maxPay = null
+        private readonly int $id,
+        private readonly string $code,
+        private readonly bool $isMPS,
+        private readonly bool $isAPS,
+        private readonly string $name,
+        private readonly string $nameEn,
+        private readonly array $phones,
+        private readonly array $emails,
+        private readonly Address $address,
+        private readonly ?string $info = null,
+        private readonly ?string $currency = null,
+        private readonly ?string $language = null,
+        private readonly ?int $normalBusinessHoursFrom = null,
+        private readonly ?int $normalBusinessHoursTo = null,
+        private readonly ?int $halfDayBusinessHoursFrom = null,
+        private readonly ?int $halfDayBusinessHoursTo = null,
+        private readonly array $shipmentTypes = [],
+        private readonly ?string $partnerCode = null,
+        private readonly ?string $hubCode = null,
+        private readonly ?string $hubName = null,
+        private readonly ?string $hubNameEn = null,
     ) {
-        $this->officeCode = $officeCode;
-        $this->officeName = $officeName;
-        $this->officeNameEn = $officeNameEn;
-        $this->companyName = $companyName;
-        $this->companyNameEn = $companyNameEn;
-        $this->email = $email;
-        $this->phone = $phone;
-        $this->phone2 = $phone2;
-        $this->address = $address;
-        $this->workHours = $workHours;
-        $this->isMotorcycle = $isMotorcycle;
-        $this->isDenominated = $isDenominated;
-        $this->isCredit = $isCredit;
-        $this->isTakeBackOffice = $isTakeBackOffice;
-        $this->isBehalfOf = $isBehalfOf;
-        $this->workingTime = $workingTime;
-        $this->priority = $priority;
-        $this->maxWeight = $maxWeight;
-        $this->maxPay = $maxPay;
     }
 
-    public function getOfficeCode(): ?string
+    public function getId(): int
     {
-        return $this->officeCode;
+        return $this->id;
     }
 
-    public function setOfficeCode(?string $officeCode): self
+    public function getCode(): string
     {
-        $this->officeCode = $officeCode;
-        return $this;
+        return $this->code;
     }
 
-    public function getOfficeName(): ?string
+    public function isMPS(): bool
     {
-        return $this->officeName;
+        return $this->isMPS;
     }
 
-    public function setOfficeName(?string $officeName): self
+    public function isAPS(): bool
     {
-        $this->officeName = $officeName;
-        return $this;
+        return $this->isAPS;
     }
 
-    public function getOfficeNameEn(): ?string
+    public function getName(): string
     {
-        return $this->officeNameEn;
+        return $this->name;
     }
 
-    public function setOfficeNameEn(?string $officeNameEn): self
+    public function getNameEn(): string
     {
-        $this->officeNameEn = $officeNameEn;
-        return $this;
+        return $this->nameEn;
     }
 
-    public function getCompanyName(): ?string
+    /**
+     * @return string[]
+     */
+    public function getPhones(): array
     {
-        return $this->companyName;
+        return $this->phones;
     }
 
-    public function setCompanyName(?string $companyName): self
+    /**
+     * @return string[]
+     */
+    public function getEmails(): array
     {
-        $this->companyName = $companyName;
-        return $this;
+        return $this->emails;
     }
 
-    public function getCompanyNameEn(): ?string
-    {
-        return $this->companyNameEn;
-    }
-
-    public function setCompanyNameEn(?string $companyNameEn): self
-    {
-        $this->companyNameEn = $companyNameEn;
-        return $this;
-    }
-
-    public function getEmail(): ?string
-    {
-        return $this->email;
-    }
-
-    public function setEmail(?string $email): self
-    {
-        $this->email = $email;
-        return $this;
-    }
-
-    public function getPhone(): ?string
-    {
-        return $this->phone;
-    }
-
-    public function setPhone(?string $phone): self
-    {
-        $this->phone = $phone;
-        return $this;
-    }
-
-    public function getPhone2(): ?string
-    {
-        return $this->phone2;
-    }
-
-    public function setPhone2(?string $phone2): self
-    {
-        $this->phone2 = $phone2;
-        return $this;
-    }
-
-    public function getAddress(): ?OfficeAddress
+    public function getAddress(): Address
     {
         return $this->address;
     }
 
-    public function setAddress(?OfficeAddress $address): self
+    public function getInfo(): ?string
     {
-        $this->address = $address;
-        return $this;
+        return $this->info;
     }
 
-    public function getWorkHours(): ?array
+    public function getCurrency(): ?string
     {
-        return $this->workHours;
+        return $this->currency;
     }
 
-    public function setWorkHours(?array $workHours): self
+    public function getLanguage(): ?string
     {
-        $this->workHours = $workHours;
-        return $this;
+        return $this->language;
     }
 
-    public function isMotorcycle(): ?bool
+    public function getNormalBusinessHoursFrom(): ?int
     {
-        return $this->isMotorcycle;
+        return $this->normalBusinessHoursFrom;
     }
 
-    public function setIsMotorcycle(?bool $isMotorcycle): self
+    public function getNormalBusinessHoursTo(): ?int
     {
-        $this->isMotorcycle = $isMotorcycle;
-        return $this;
+        return $this->normalBusinessHoursTo;
     }
 
-    public function isDenominated(): ?bool
+    public function getHalfDayBusinessHoursFrom(): ?int
     {
-        return $this->isDenominated;
+        return $this->halfDayBusinessHoursFrom;
     }
 
-    public function setIsDenominated(?bool $isDenominated): self
+    public function getHalfDayBusinessHoursTo(): ?int
     {
-        $this->isDenominated = $isDenominated;
-        return $this;
+        return $this->halfDayBusinessHoursTo;
     }
 
-    public function isCredit(): ?bool
+    /**
+     * @return string[]
+     */
+    public function getShipmentTypes(): array
     {
-        return $this->isCredit;
+        return $this->shipmentTypes;
     }
 
-    public function setIsCredit(?bool $isCredit): self
+    public function getPartnerCode(): ?string
     {
-        $this->isCredit = $isCredit;
-        return $this;
+        return $this->partnerCode;
     }
 
-    public function isTakeBackOffice(): ?bool
+    public function getHubCode(): ?string
     {
-        return $this->isTakeBackOffice;
+        return $this->hubCode;
     }
 
-    public function setIsTakeBackOffice(?bool $isTakeBackOffice): self
+    public function getHubName(): ?string
     {
-        $this->isTakeBackOffice = $isTakeBackOffice;
-        return $this;
+        return $this->hubName;
     }
 
-    public function isBehalfOf(): ?bool
+    public function getHubNameEn(): ?string
     {
-        return $this->isBehalfOf;
+        return $this->hubNameEn;
     }
 
-    public function setIsBehalfOf(?bool $isBehalfOf): self
+    public function normalBusinessHoursFromAsDateTime(): ?\DateTimeImmutable
     {
-        $this->isBehalfOf = $isBehalfOf;
-        return $this;
-    }
-
-    public function getWorkingTime(): ?string
-    {
-        return $this->workingTime;
-    }
-
-    public function setWorkingTime(?string $workingTime): self
-    {
-        $this->workingTime = $workingTime;
-        return $this;
-    }
-
-    public function getPriority(): ?string
-    {
-        return $this->priority;
-    }
-
-    public function setPriority(?string $priority): self
-    {
-        $this->priority = $priority;
-        return $this;
-    }
-
-    public function getMaxWeight(): ?float
-    {
-        return $this->maxWeight;
-    }
-
-    public function setMaxWeight(?float $maxWeight): self
-    {
-        $this->maxWeight = $maxWeight;
-        return $this;
-    }
-
-    public function getMaxPay(): ?float
-    {
-        return $this->maxPay;
-    }
-
-    public function setMaxPay(?float $maxPay): self
-    {
-        $this->maxPay = $maxPay;
-        return $this;
-    }
-
-    public static function fromArray(array $data): static
-    {
-        $workHours = null;
-        if (isset($data['workHours']) && is_array($data['workHours'])) {
-            $workHours = array_map(
-                fn($item) => OfficeWorkHours::fromArray($item),
-                $data['workHours']
-            );
+        if ($this->normalBusinessHoursFrom === null) {
+            return null;
         }
 
-        $address = null;
-        if (isset($data['address']) && is_array($data['address'])) {
-            $address = OfficeAddress::fromArray($data['address']);
+        return (new \DateTimeImmutable())->setTimestamp((int) ($this->normalBusinessHoursFrom / 1000));
+    }
+
+    public function normalBusinessHoursToAsDateTime(): ?\DateTimeImmutable
+    {
+        if ($this->normalBusinessHoursTo === null) {
+            return null;
         }
 
+        return (new \DateTimeImmutable())->setTimestamp((int) ($this->normalBusinessHoursTo / 1000));
+    }
+
+    public function halfDayBusinessHoursFromAsDateTime(): ?\DateTimeImmutable
+    {
+        if ($this->halfDayBusinessHoursFrom === null) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable())->setTimestamp((int) ($this->halfDayBusinessHoursFrom / 1000));
+    }
+
+    public function halfDayBusinessHoursToAsDateTime(): ?\DateTimeImmutable
+    {
+        if ($this->halfDayBusinessHoursTo === null) {
+            return null;
+        }
+
+        return (new \DateTimeImmutable())->setTimestamp((int) ($this->halfDayBusinessHoursTo / 1000));
+    }
+
+    /**
+     * @param array<string, mixed> $data
+     */
+    public static function fromArray(array $data): self
+    {
         return new self(
-            $data['officeCode'] ?? null,
-            $data['officeName'] ?? null,
-            $data['officeNameEn'] ?? null,
-            $data['companyName'] ?? null,
-            $data['companyNameEn'] ?? null,
-            $data['email'] ?? null,
-            $data['phone'] ?? null,
-            $data['phone2'] ?? null,
-            $address,
-            $workHours,
-            $data['isMotorcycle'] ?? null,
-            $data['isDenominated'] ?? null,
-            $data['isCredit'] ?? null,
-            $data['isTakeBackOffice'] ?? null,
-            $data['isBehalfOf'] ?? null,
-            $data['workingTime'] ?? null,
-            $data['priority'] ?? null,
-            isset($data['maxWeight']) ? (float) $data['maxWeight'] : null,
-            isset($data['maxPay']) ? (float) $data['maxPay'] : null
+            id: (int) ($data['id'] ?? 0),
+            code: (string) ($data['code'] ?? ''),
+            isMPS: (bool) ($data['isMPS'] ?? false),
+            isAPS: (bool) ($data['isAPS'] ?? false),
+            name: (string) ($data['name'] ?? ''),
+            nameEn: (string) ($data['nameEn'] ?? ''),
+            phones: array_map('strval', (array) ($data['phones'] ?? [])),
+            emails: array_map('strval', (array) ($data['e-mails'] ?? [])),
+            address: Address::fromArray($data['address'] ?? []),
+            info: isset($data['info']) ? (string) $data['info'] : null,
+            currency: isset($data['currency']) ? (string) $data['currency'] : null,
+            language: isset($data['language']) ? (string) $data['language'] : null,
+            normalBusinessHoursFrom: isset($data['normalBusinessHoursFrom'])
+                ? (int) $data['normalBusinessHoursFrom']
+                : null,
+            normalBusinessHoursTo: isset($data['normalBusinessHoursTo'])
+                ? (int) $data['normalBusinessHoursTo']
+                : null,
+            halfDayBusinessHoursFrom: isset($data['halfDayBusinessHoursFrom'])
+                ? (int) $data['halfDayBusinessHoursFrom']
+                : null,
+            halfDayBusinessHoursTo: isset($data['halfDayBusinessHoursTo'])
+                ? (int) $data['halfDayBusinessHoursTo']
+                : null,
+            shipmentTypes: array_map('strval', (array) ($data['shipmentTypes'] ?? [])),
+            partnerCode: isset($data['partnerCode']) ? (string) $data['partnerCode'] : null,
+            hubCode: isset($data['hubCode']) ? (string) $data['hubCode'] : null,
+            hubName: isset($data['hubName']) ? (string) $data['hubName'] : null,
+            hubNameEn: isset($data['hubNameEn']) ? (string) $data['hubNameEn'] : null,
         );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'code' => $this->code,
+            'isMPS' => $this->isMPS,
+            'isAPS' => $this->isAPS,
+            'name' => $this->name,
+            'nameEn' => $this->nameEn,
+            'phones' => $this->phones,
+            'e-mails' => $this->emails,
+            'address' => $this->address->toArray(),
+            'info' => $this->info,
+            'currency' => $this->currency,
+            'language' => $this->language,
+            'normalBusinessHoursFrom' => $this->normalBusinessHoursFrom,
+            'normalBusinessHoursTo' => $this->normalBusinessHoursTo,
+            'halfDayBusinessHoursFrom' => $this->halfDayBusinessHoursFrom,
+            'halfDayBusinessHoursTo' => $this->halfDayBusinessHoursTo,
+            'shipmentTypes' => $this->shipmentTypes,
+            'partnerCode' => $this->partnerCode,
+            'hubCode' => $this->hubCode,
+            'hubName' => $this->hubName,
+            'hubNameEn' => $this->hubNameEn,
+        ];
     }
 }

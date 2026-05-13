@@ -4,109 +4,182 @@ declare(strict_types=1);
 
 namespace Econt\EcontApi\Service;
 
-use Econt\EcontApi\Client\EcontClientInterface;
-use Econt\EcontApi\Model\Response\EcontResponse;
-use Econt\EcontApi\Model\Shipment\Shipment;
-use Econt\EcontApi\Service\Contract\ShipmentServiceInterface;
+use Econt\EcontApi\Exception\EcontApiException;
+use Econt\EcontApi\Exception\EcontNetworkException;
+use Econt\EcontApi\Exception\EcontValidationException;
+use Econt\EcontApi\Http\HttpAdapterInterface;
+use Econt\EcontApi\Model\Result\CancelLabelResult;
+use Econt\EcontApi\Model\Result\ConfirmLabelResult;
+use Econt\EcontApi\Model\Result\CourierRequestResult;
+use Econt\EcontApi\Model\Result\PriceCalculationResult;
+use Econt\EcontApi\Model\Result\ShipmentLabelResult;
+use Econt\EcontApi\Model\Result\ShipmentTrackingResult;
+use Econt\EcontApi\Model\Shipment\CourierRequest;
+use Econt\EcontApi\Model\Shipment\ShippingLabel;
 
-class ShipmentService implements ShipmentServiceInterface
+/**
+ * Service for shipment label lifecycle and courier request operations.
+ */
+class ShipmentService
 {
-    private const SERVICE_CREATE_BILL = 'Services.Shipments.createBill';
-    private const SERVICE_CONFIRM_BILL = 'Services.Shipments.confirmBill';
-    private const SERVICE_CANCEL_BILL = 'Services.Shipments.cancelBill';
-    private const SERVICE_UPDATE_BILL = 'Services.Shipments.updateBill';
-    private const SERVICE_TRACK_BILL = 'Services.Shipments.trackBill';
-    private const SERVICE_REQUEST_COURIER = 'Services.Shipments.requestCourier';
-    private const SERVICE_CALCULATION = 'Services.Shipments.getShipmentCalculation';
-
-    private EcontClientInterface $client;
-
-    public function __construct(EcontClientInterface $client)
-    {
-        $this->client = $client;
+    public function __construct(
+        private readonly HttpAdapterInterface $adapter,
+    ) {
     }
 
-    public function createBill(Shipment $shipment): EcontResponse
+    /**
+     * Calculate the shipping price without creating a waybill.
+     *
+     * @throws EcontValidationException
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function calculatePrice(ShippingLabel $label): PriceCalculationResult
     {
-        $data = $shipment->toArray();
+        $label->validate();
+        $cloned = $label->setMode('calculate');
 
-        if (isset($data['sender']) && $data['sender'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['sender'] = $data['sender']->toArray();
-        }
-        if (isset($data['receiver']) && $data['receiver'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['receiver'] = $data['receiver']->toArray();
+        $response = $this->adapter->post(
+            'Shipments/LabelService.createLabel.json',
+            ['label' => $cloned->toArray(), 'mode' => 'calculate'],
+        );
+
+        $labelData = $response['label'] ?? $response;
+
+        // Price may be nested under 'price' key or directly on the label object
+        if (isset($labelData['price']) && is_array($labelData['price'])) {
+            $priceData = $labelData['price'];
+        } else {
+            // API may return totalPrice/currency directly on the label
+            $priceData = $labelData;
         }
 
-        return $this->client->request(self::SERVICE_CREATE_BILL, $data);
+        return PriceCalculationResult::fromArray((array) $priceData);
     }
 
-    public function confirmBill(string $billGuid): EcontResponse
+    /**
+     * Validate a label without creating a waybill.
+     *
+     * @throws EcontValidationException
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function validateLabel(ShippingLabel $label): ShipmentLabelResult
     {
-        return $this->client->request(self::SERVICE_CONFIRM_BILL, [
-            'bill_guid' => $billGuid,
-        ]);
+        $label->validate();
+        $cloned = $label->setMode('validate');
+
+        $response = $this->adapter->post(
+            'Shipments/LabelService.createLabel.json',
+            ['label' => $cloned->toArray(), 'mode' => 'validate'],
+        );
+
+        return ShipmentLabelResult::fromArray($response);
     }
 
-    public function cancelBill(string $billGuid): EcontResponse
+    /**
+     * Create a shipping label and get a waybill number.
+     *
+     * @throws EcontValidationException
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function createLabel(ShippingLabel $label): ShipmentLabelResult
     {
-        return $this->client->request(self::SERVICE_CANCEL_BILL, [
-            'bill_guid' => $billGuid,
-        ]);
+        $label->validate();
+        $cloned = $label->setMode('create');
+
+        $response = $this->adapter->post(
+            'Shipments/LabelService.createLabel.json',
+            ['label' => $cloned->toArray(), 'mode' => 'create'],
+        );
+
+        return ShipmentLabelResult::fromArray($response);
     }
 
-    public function updateBill(Shipment $shipment, string $billGuid): EcontResponse
+    /**
+     * Confirm (process) a label by waybill number.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function confirmLabel(string $waybillNumber): ConfirmLabelResult
     {
-        $data = $shipment->toArray();
-        $data['bill_guid'] = $billGuid;
+        $response = $this->adapter->post(
+            'Shipments/LabelService.processLabel.json',
+            ['waybillNumber' => $waybillNumber],
+        );
 
-        if (isset($data['sender']) && $data['sender'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['sender'] = $data['sender']->toArray();
-        }
-        if (isset($data['receiver']) && $data['receiver'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['receiver'] = $data['receiver']->toArray();
-        }
-
-        return $this->client->request(self::SERVICE_UPDATE_BILL, $data);
+        return ConfirmLabelResult::fromArray($response);
     }
 
-    public function trackBill(string $billGuid): EcontResponse
+    /**
+     * Update an existing label.
+     *
+     * @throws EcontValidationException
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function updateLabel(string $waybillNumber, ShippingLabel $updatedLabel): ShipmentLabelResult
     {
-        return $this->client->request(self::SERVICE_TRACK_BILL, [
-            'bill_guid' => $billGuid,
-        ]);
+        $updatedLabel->validate();
+        $cloned = $updatedLabel->setMode('create');
+        $labelArray = $cloned->toArray();
+        $labelArray['waybillNumber'] = $waybillNumber;
+
+        $response = $this->adapter->post(
+            'Shipments/LabelService.createLabel.json',
+            ['label' => $labelArray, 'mode' => 'create'],
+        );
+
+        return ShipmentLabelResult::fromArray($response);
     }
 
-    public function requestCourier(
-        string $scheduleDate,
-        ?string $scheduleTimeFrom = null,
-        ?string $scheduleTimeTo = null
-    ): EcontResponse {
-        $data = [
-            'schedule_date' => $scheduleDate,
-        ];
+    /**
+     * Cancel (delete) a label by waybill number.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function cancelLabel(string $waybillNumber): CancelLabelResult
+    {
+        $response = $this->adapter->post(
+            'Shipments/LabelService.deleteLabel.json',
+            ['waybillNumber' => $waybillNumber],
+        );
 
-        if ($scheduleTimeFrom !== null) {
-            $data['schedule_time_from'] = $scheduleTimeFrom;
-        }
-
-        if ($scheduleTimeTo !== null) {
-            $data['schedule_time_to'] = $scheduleTimeTo;
-        }
-
-        return $this->client->request(self::SERVICE_REQUEST_COURIER, $data);
+        return CancelLabelResult::fromArray($response);
     }
 
-    public function getShipmentCalculation(Shipment $shipment): EcontResponse
+    /**
+     * Track a shipment by waybill number.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function trackShipment(string $waybillNumber): ShipmentTrackingResult
     {
-        $data = $shipment->toArray();
+        $response = $this->adapter->post(
+            'Shipments/LabelService.getWaybillContents.json',
+            ['waybillNumber' => $waybillNumber],
+        );
 
-        if (isset($data['sender']) && $data['sender'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['sender'] = $data['sender']->toArray();
-        }
-        if (isset($data['receiver']) && $data['receiver'] instanceof \Econt\EcontApi\Model\AbstractModel) {
-            $data['receiver'] = $data['receiver']->toArray();
-        }
+        return ShipmentTrackingResult::fromArray($response);
+    }
 
-        return $this->client->request(self::SERVICE_CALCULATION, $data);
+    /**
+     * Request a courier pick-up.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function requestCourier(CourierRequest $request): CourierRequestResult
+    {
+        $response = $this->adapter->post(
+            'Shipments/LabelService.requestCourier.json',
+            $request->toArray(),
+        );
+
+        return CourierRequestResult::fromArray($response);
     }
 }

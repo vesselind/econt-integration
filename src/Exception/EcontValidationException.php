@@ -4,22 +4,28 @@ declare(strict_types=1);
 
 namespace Econt\EcontApi\Exception;
 
+/**
+ * Thrown when client-side validation of a request payload fails.
+ */
 class EcontValidationException extends EcontException
 {
-    private array $validationErrors;
-
+    /**
+     * @param string[] $violations
+     */
     public function __construct(
-        array $validationErrors = [],
-        string $message = 'Validation failed',
+        string $message,
+        private readonly array $violations = [],
         int $code = 0,
-        ?\Throwable $previous = null
+        ?\Throwable $previous = null,
     ) {
-        $this->validationErrors = $validationErrors;
         parent::__construct($message, $code, $previous);
     }
 
-    public function getValidationErrors(): array
+    /**
+     * @return string[]
+     */
+    public function getViolations(): array
     {
-        return $this->validationErrors;
+        return $this->violations;
     }
 }

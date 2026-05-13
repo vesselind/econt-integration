@@ -1,521 +1,395 @@
-# Econt Integration Library
+# PHP Econt Integration Library
 
-PHP library for integrating with [Econt](https://www.econt.com/) API - Bulgarian delivery company services.
+A standalone PHP library for integrating with [Econt](https://www.econt.com/) Delivery Services API. Designed to be reusable across multiple projects and fully compatible with **PHP 8.2+**, **Symfony 6/7/8**, and any PSR-18 HTTP client.
+
+---
+
+## Features
+
+- 📦 **Shipment management** — create, confirm, update, cancel labels
+- 🗺️ **Address data** — countries, cities, streets, quarters, address validation
+- 🏢 **Office / Econtomat lookup** — with filtering by country and city
+- 💰 **Price calculation** — real-time shipment cost estimates
+- 🚚 **Courier requests** — schedule pickups
+- 📬 **Return & delivery instructions** — configurable courier/return instructions
+- 🔄 **Dual HTTP adapter** — Symfony HttpClient (default) or any PSR-18 client
+- 🧩 **Typed model objects** — all requests and responses map to strongly-typed PHP classes
+- ✅ **PHPStan level 6 + PSR-12 compliant**
+
+---
 
 ## Requirements
 
-- PHP 8.2+
-- Symfony Serializer 6.0+
-- PSR-18 compatible HTTP client
+| Dependency | Version |
+|------------|---------|
+| PHP | `>= 8.2` |
+| symfony/http-client | `^6.0 \| ^7.0 \| ^8.0` |
+| psr/http-client | `^1.0` |
+| psr/http-factory | `^1.0` |
+| nyholm/psr7 | `^1.8` |
+
+---
 
 ## Installation
-
-This package is available on [Packagist](https://packagist.org/packages/vesselind/econt-integration) but can also be installed directly from GitHub.
-
-### Via Packagist (recommended when published)
 
 ```bash
 composer require vesselind/econt-integration
 ```
 
-### Via GitHub Repository
-
-Add this to your `composer.json`:
-
-```json
-{
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/vesselind/econt-integration"
-        }
-    ],
-    "require": {
-        "vesselind/econt-integration": "^1.0"
-    }
-}
-```
-
-Then run:
-```bash
-composer update vesselind/econt-integration
-```
-
-Or use Composer directly:
-```bash
-composer require vesselind/econt-integration:dev-main --repository='{"type": "vcs", "url": "https://github.com/vesselind/econt-integration"}'
-```
+---
 
 ## Quick Start
 
-### 1. Create Configuration
+### Standalone (any PHP project)
 
 ```php
-use Econt\EcontApi\Configuration\EcontConfiguration;
+<?php
+declare(strict_types=1);
 
-// Demo mode (testing)
-$config = EcontConfiguration::demo();
+use Econt\EcontApi\EcontClient;
+use Econt\EcontApi\EcontConfiguration;
+use Econt\EcontApi\Http\SymfonyHttpAdapter;
+use Symfony\Component\HttpClient\HttpClient;
 
-// Production mode
-$config = EcontConfiguration::production('your_username', 'your_password');
-```
+// 1. Configure — use the factory for the demo/test endpoint (credentials pre-filled)
+$config = EcontConfiguration::forDemo();
 
-### 2. Create Client
+// Or with explicit credentials for production
+$config = new EcontConfiguration(
+    username: 'your-username',
+    password: 'your-password',
+    baseUrl: EcontConfiguration::PRODUCTION_URL,
+    timeout: 30,
+    language: 'bg'  // 'bg' or 'en'
+);
 
-```php
-use Econt\EcontApi\Client\EcontClient;
-use Symfony\Component\Serializer\Serializer;
-use Symfony\Component\Serializer\Encoder\XmlEncoder;
-use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+// 2. Create adapter + client
+$adapter = new SymfonyHttpAdapter(HttpClient::create());
+$client  = new EcontClient($config, $adapter);
 
-// Create serializer
-$serializer = new Serializer([new ObjectNormalizer()], [new XmlEncoder()]);
-
-// Create Econt client (HTTP client is created internally)
-$client = EcontClient::create($config, $serializer);
-```
-
-Or, if you want to provide your own PSR-18 HTTP client:
-
-```php
-use Symfony\Component\HttpClient\Psr18Client;
-
-// Create your own HTTP client
-$httpClient = new Psr18Client();
-
-// Create Econt client with custom HTTP client
-$client = new EcontClient($config, $httpClient, $serializer);
-```
-
-### 3. Use Services
-
-```php
-use Econt\EcontApi\Service\OfficeService;
-use Econt\EcontApi\Service\AddressService;
-use Econt\EcontApi\Service\ShipmentService;
-use Econt\EcontApi\Service\PaymentService;
-
-// Create service instances
-$officeService = new OfficeService($client);
-$addressService = new AddressService($client);
-$shipmentService = new ShipmentService($client);
-$paymentService = new PaymentService($client);
-```
-
-## Services
-
-### Office Service
-
-```php
-use Econt\EcontApi\Service\OfficeService;
-
-$officeService = new OfficeService($client);
-
-// Get all offices
-$offices = $officeService->getOffices();
-
-// Get offices in a specific city
-$sofiaOffices = $officeService->getOffices('Sofia', 'BG');
-
-// Get single office by code
-$office = $officeService->getOffice('BGR001');
-
-// Raw API response
-$response = $officeService->requestOffices();
-```
-
-**Office Model:**
-
-```php
-use Econt\EcontApi\Model\Office\Office;
-use Econt\EcontApi\Model\Office\OfficeAddress;
-
-$office->getOfficeCode();      // "BGR001"
-$office->getOfficeName();      // "София Център"
-$office->getPhone();           // "+35921234567"
-$office->getEmail();           // "sofia@econt.bg"
-
-// Address details
-$address = $office->getAddress();
-$address->getCity();           // "Sofia"
-$address->getStreet();         // "Vitosha"
-$address->getStreetNum();      // "10"
-$address->getLatitude();       // 42.6977
-$address->getLongitude();      // 23.3219
-
-// Working hours
-$workHours = $office->getWorkHours();
-foreach ($workHours as $hours) {
-    $hours->getDayOfWeek();    // "Monday"
-    $hours->getFromHour();     // "08:00"
-    $hours->getToHour();       // "18:00"
+// 3. Start querying
+$countries = $client->address()->getCountries();
+foreach ($countries as $country) {
+    echo $country->nameEn . PHP_EOL;
 }
 ```
+
+### With Any PSR-18 Client
+
+```php
+use Econt\EcontApi\Http\Psr18HttpAdapter;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Symfony\Component\HttpClient\Psr18Client;
+
+$psr17Factory = new Psr17Factory();
+$adapter = new Psr18HttpAdapter(new Psr18Client(), $psr17Factory, $psr17Factory);
+$client  = new EcontClient($config, $adapter);
+```
+
+### Symfony DI Wiring
+
+```yaml
+# config/services.yaml
+services:
+    Econt\EcontApi\EcontConfiguration:
+        arguments:
+            $username: '%env(ECONT_USERNAME)%'
+            $password: '%env(ECONT_PASSWORD)%'
+            $baseUrl:  '%env(ECONT_BASE_URL)%'
+            $timeout:  30
+            $language: 'bg'
+
+    Econt\EcontApi\Http\SymfonyHttpAdapter:
+        arguments:
+            $httpClient: '@Symfony\Contracts\HttpClient\HttpClientInterface'
+
+    Econt\EcontApi\EcontClient:
+        arguments:
+            $configuration: '@Econt\EcontApi\EcontConfiguration'
+            $adapter:        '@Econt\EcontApi\Http\SymfonyHttpAdapter'
+```
+
+```
+# .env
+ECONT_USERNAME=iasp-dev
+ECONT_PASSWORD=1Asp-dev
+ECONT_BASE_URL=https://demo.econt.com/ee/services
+```
+
+---
+
+## Usage
 
 ### Address Service
 
 ```php
-use Econt\EcontApi\Service\AddressService;
+$addressService = $client->address();
 
-$addressService = new AddressService($client);
+// Countries
+$countries = $addressService->getCountries();  // CountryCollection
 
-// Get countries
-$countries = $addressService->getCountries();
-$bg = $addressService->getCountry('BG');
+// Cities for a country
+$cities = $addressService->getCities('BGR');   // CityCollection
 
-// Get cities by country
-$cities = $addressService->getCities('BG');
-$cities = $addressService->getCities('BG', 'Sofia', true); // filter by name, only with office
+// Streets for a city (cityID from City model)
+$streets = $addressService->getStreets(41);    // StreetCollection
 
-// Get quarters in a city
-$quarters = $addressService->getQuarters('68134'); // cityId
-$quarters = $addressService->getQuarters('68134', 'Center'); // filter by name
+// Quarters for a city
+$quarters = $addressService->getQuarters(41); // QuarterCollection
 
-// Get streets in a city
-$streets = $addressService->getStreets('68134');
-$streets = $addressService->getStreets('68134', 'Vitosha'); // filter by name
-```
-
-**Address Model:**
-
-```php
-use Econt\EcontApi\Model\Address\Address;
+// Validate an address
+use Econt\EcontApi\Model\Location\Address;
+use Econt\EcontApi\Model\Location\City;
+use Econt\EcontApi\Model\Location\Country;
 
 $address = new Address(
-    '68134',         // cityId
-    'Sofia',         // cityName
-    null,            // quarterId
-    'Center',        // quarterName
-    null,            // streetId
-    'Vitosha',       // streetName
-    'bul.',          // streetType
-    '10',            // streetNum
-    '5',             // buildingNum
-    'A',             // entranceNum
-    '3',             // floorNum
-    '12'             // apartmentNum
+    city: new City(
+        country:  new Country(code2: 'BG', code3: 'BGR', name: 'България', nameEn: 'Bulgaria'),
+        postCode: '7000',
+        name:     'Русе',
+        nameEn:   'Ruse',
+    ),
+    street: 'Славянска',
+    num:    '16',
 );
 
-// Format as Bulgarian address string
-echo $address->toFormattedString();
-// Output: "bul. Vitosha 10, бл. 5, вх. A, ет. 3, ап. 12, Sofia"
+$validated = $addressService->validateAddress($address);
+echo $validated->validationStatus; // "normal" | "processed" | "invalid"
 ```
 
-### Shipment Service
+### Office Service
 
 ```php
-use Econt\EcontApi\Service\ShipmentService;
-use Econt\EcontApi\Model\Shipment\Shipment;
-use Econt\EcontApi\Model\Shipment\ShipmentParty;
-use Econt\EcontApi\Model\Shipment\ShipmentItem;
-use Econt\EcontApi\Model\Address\Address;
+$officeService = $client->office();
 
-$shipmentService = new ShipmentService($client);
+// All offices / Econtomats in Bulgaria
+$offices = $officeService->getOffices(countryCode: 'BGR');
 
-// Create sender and receiver
-$sender = new ShipmentParty();
-$sender->setName('John Doe')
-    ->setPhone('+359888111111')
-    ->setEmail('john@example.com')
-    ->setOfficeCode('BGR001'); // Econt office for pickup
+// Offices in a specific city
+$offices = $officeService->getOffices(countryCode: 'BGR', cityId: 41);
 
-$receiver = new ShipmentParty();
-$receiver->setName('Jane Smith')
-    ->setPhone('+359888222222')
-    ->setAddress(new Address(
-        '56784',         // Plovdiv cityId
-        'Plovdiv',       // cityName
-        null, null, null, null, null, '15' // street num
-    ));
+// Filter only physical offices (exclude Econtomat/APS machines)
+$regularOffices = array_filter(
+    iterator_to_array($offices),
+    fn($o) => !$o->isAPS
+);
+```
 
-// Create shipment item
-$item = new ShipmentItem();
-$item->setKeyId('ITEM001')
-    ->setDescription('Electronics - Phone')
-    ->setQuantity(1)
-    ->setWeight(0.5)
-    ->setPrice(999.99)
-    ->setIsFragile(true);
+### Shipment Service — Price Calculation
 
-// Create shipment
-$shipment = new Shipment();
-$shipment->setSender($sender)
-    ->setReceiver($receiver)
-    ->setPayment('pay_before')
-    ->setDeclaredValue(999.99)
-    ->setCurrency('BGN')
-    ->setWeight('0.5')
-    ->setDescription('Phone shipment')
-    ->setItems([$item])
-    ->setLoadType('package')
-    ->setService('EXPRESS')
-    ->setServiceType('DOOR_TO_DOOR')
-    ->setIsCod(true)
-    ->setCodValue(999.99)
-    ->setCodCurrency('BGN');
+```php
+use Econt\EcontApi\Model\Shipment\ShippingLabel;
+use Econt\EcontApi\Model\Shipment\ClientProfile;
+use Econt\EcontApi\Enum\ShipmentType;
 
-// Create waybill
-$response = $shipmentService->createBill($shipment);
+$label = new ShippingLabel(
+    senderClient:        new ClientProfile(name: 'Иван Иванов', phones: ['0888888888']),
+    senderAddress:       $senderAddress,
+    receiverClient:      new ClientProfile(name: 'Богдан Богданов', phones: ['0878787878']),
+    receiverAddress:     $receiverAddress,
+    packCount:           1,
+    shipmentType:        ShipmentType::PACK,
+    weight:              2.5,
+    shipmentDescription: 'Книги',
+    mode:                'calculate',
+);
 
-if ($response->isSuccess()) {
-    $data = $response->getData();
-    $billGuid = $data['guid'] ?? null;
+$price = $client->shipment()->calculatePrice($label);
+echo $price->totalPrice . ' ' . $price->currency; // e.g. "7.32 BGN"
+```
 
-    // Confirm waybill
-    $confirmResponse = $shipmentService->confirmBill($billGuid);
-}
+### Shipment Service — Create & Cancel Label
 
-// Track shipment
-$trackResponse = $shipmentService->trackBill($billGuid);
+```php
+// Create
+$label->mode = 'create';
+$created = $client->shipment()->createLabel($label);
+echo $created->waybillNumber;  // e.g. "1234567890"
 
-// Cancel waybill
-$cancelResponse = $shipmentService->cancelBill($billGuid);
+// Cancel
+$client->shipment()->cancelLabel($created->waybillNumber);
+```
 
-// Calculate shipment price
-$calcResponse = $shipmentService->getShipmentCalculation($shipment);
+### Shipment Service — Other Operations
+
+```php
+// Confirm a label (after creation)
+$client->shipment()->confirmLabel($waybillNumber);
+
+// Update a label
+$label->weight = 3.0;
+$client->shipment()->updateLabel($label);
 
 // Request courier pickup
-$courrierResponse = $shipmentService->requestCourier(
-    '2024-01-15',
-    '09:00',
-    '12:00'
+use Econt\EcontApi\Model\Shipment\CourierRequest;
+
+$request = new CourierRequest(
+    shipmentWaybillNumber:  $waybillNumber,
+    requestCourierTimeFrom: '09:00',
+    requestCourierTimeTo:   '12:00',
 );
+$client->shipment()->requestCourier($request);
 ```
 
-### Payment Service
+---
+
+## Model Reference
+
+### Key Models
+
+| Model | Namespace | Description |
+|-------|-----------|-------------|
+| `Country` | `Model\Location` | Country with ISO codes, currency, phone code |
+| `City` | `Model\Location` | City with post code, municipality, geo coords |
+| `Street` | `Model\Location` | Street name (BG + EN) |
+| `Quarter` | `Model\Location` | City quarter/district |
+| `Address` | `Model\Location` | Full address with city, street, num, geo |
+| `ValidatedAddress` | `Model\Location` | Address extended with `validationStatus` |
+| `Office` | `Model\Office` | Econt office or Econtomat with full details |
+| `ShippingLabel` | `Model\Shipment` | Complete shipment label with all parameters |
+| `ClientProfile` | `Model\Shipment` | Sender or receiver contact details |
+| `ShippingLabelServices` | `Model\Shipment` | Additional services (COD, insurance, SMS…) |
+| `ReturnInstructionParams` | `Model\Shipment` | Return instructions configuration |
+| `PackingListElement` | `Model\Shipment` | Item in a packing list |
+| `PriceResult` | `Model\Result` | Calculated price with currency |
+
+### Enums
 
 ```php
-use Econt\EcontApi\Service\PaymentService;
+use Econt\EcontApi\Enum\ShipmentType;
+// PACK, DOCUMENT, PALLET, CARGO, FURNITURE, ...
 
-$paymentService = new PaymentService($client);
-
-// Process payment
-$response = $paymentService->setPay($billGuid, 'cash', 50.00);
-
-// Check payment status
-$statusResponse = $paymentService->getPayStatus($billGuid);
-
-// Create invoice
-$invoiceResponse = $paymentService->createInvoice($billGuid);
-
-// Get invoice
-$invoiceResponse = $paymentService->getInvoice($invoiceId);
+use Econt\EcontApi\Enum\TariffSubCode;
+// OFFICE_TO_OFFICE, OFFICE_TO_DOOR, DOOR_TO_OFFICE, DOOR_TO_DOOR
 ```
 
-## Response Handling
+### Array Serialisation
 
-All service methods return an `EcontResponse` object:
+Every model supports `toArray()` / `fromArray()` using the original Econt API key names:
 
 ```php
-use Econt\EcontApi\Model\Response\EcontResponse;
+$country = Country::fromArray([
+    'code2'  => 'BG',
+    'code3'  => 'BGR',
+    'name'   => 'България',
+    'nameEn' => 'Bulgaria',
+]);
 
-$response = $officeService->getOffices();
-
-if ($response->isSuccess()) {
-    $data = $response->getData();
-    // Process successful response
-} else {
-    $errorMessage = $response->getErrorMessage();
-    $errorCode = $response->getErrorCode();
-    // Handle error
-}
-
-// Get raw data as array
-$array = $response->getData(); // returns array or null
+$array = $country->toArray();
+// ['code2' => 'BG', 'code3' => 'BGR', 'name' => 'България', 'nameEn' => 'Bulgaria']
 ```
 
-## Error Handling
+---
+
+## Exception Handling
 
 ```php
+use Econt\EcontApi\Exception\EcontException;
 use Econt\EcontApi\Exception\EcontApiException;
 use Econt\EcontApi\Exception\EcontNetworkException;
 use Econt\EcontApi\Exception\EcontValidationException;
 
 try {
-    $response = $shipmentService->createBill($shipment);
-
-    if (!$response->isSuccess()) {
-        throw new EcontApiException(
-            $response->getErrorCode(),
-            $response->getErrorMessage()
-        );
-    }
-} catch (EcontNetworkException $e) {
-    // Network connectivity issues
-    echo "Network error: " . $e->getMessage();
-} catch (EcontApiException $e) {
-    // API returned an error
-    echo "API error [{$e->getErrorCode()}]: " . $e->getErrorMessage();
+    $offices = $client->office()->getOffices('BGR', 41);
 } catch (EcontValidationException $e) {
-    // Validation failed
-    $errors = $e->getValidationErrors();
-    print_r($errors);
+    // Invalid input before any HTTP call is made
+    echo implode(', ', $e->getViolations());
+} catch (EcontApiException $e) {
+    // API returned an error response
+    echo $e->getApiErrorCode() . ': ' . $e->getApiErrorMessage();
+} catch (EcontNetworkException $e) {
+    // HTTP transport failure
+    echo 'Network error: ' . $e->getMessage();
+} catch (EcontException $e) {
+    // Base catch-all for all library exceptions
 }
 ```
 
-## Working with Models
+---
 
-All models support `toArray()` and `fromArray()` for serialization:
-
-```php
-use Econt\EcontApi\Model\Office\Office;
-
-// Create from array (e.g., from API response)
-$office = Office::fromArray($apiResponseArray);
-
-// Convert to array (e.g., for logging or caching)
-$array = $office->toArray();
-
-// All properties are camelCase
-$array['officeCode']  // not office_code
-$array['officeName']  // not office_name
-```
-
-## Symfony Integration
-
-For Symfony applications, create services in `services.yaml`:
-
-```yaml
-services:
-    Econt\EcontApi\Client\EcontClient:
-        arguments:
-            $configuration: '@econt.configuration'
-            $httpClient: '@psr18.http_client'
-            $serializer: '@econt.serializer'
-
-    Econt\EcontApi\Service\OfficeService:
-        arguments:
-            $client: '@Econt\EcontApi\Client\EcontClient'
-
-    Econt\EcontApi\Service\AddressService:
-        arguments:
-            $client: '@Econt\EcontApi\Client\EcontClient'
-
-    Econt\EcontApi\Service\ShipmentService:
-        arguments:
-            $client: '@Econt\EcontApi\Client\EcontClient'
-
-    Econt\EcontApi\Service\PaymentService:
-        arguments:
-            $client: '@Econt\EcontApi\Client\EcontClient'
-
-    econt.configuration:
-        class: Econt\EcontApi\Configuration\EcontConfiguration
-        factory: ['Econt\EcontApi\Configuration\EcontConfiguration', 'demo']
-
-    econt.serializer:
-        class: Symfony\Component\Serializer\Serializer
-        arguments:
-            - ['@serializer.normalizer']
-            - ['@serializer.encoder.xml']
-```
-
-Or use the factory pattern:
-
-```php
-use Econt\EcontApi\Configuration\EcontConfiguration;
-
-// In your service configuration
-$config = EcontConfiguration::production(
-    $_ENV['ECONT_USERNAME'],
-    $_ENV['ECONT_PASSWORD']
-)->withLanguage('en'); // Change language if needed
-```
-
-## Local Development & Contributing
-
-### Cloning the Repository
+## Running Tests
 
 ```bash
-git clone https://github.com/vesselind/econt-integration.git
-cd econt-integration
-composer install
-```
-
-### Running Tests
-
-```bash
-# Run PHPUnit tests
-.\vendor\bin\phpunit
-
-# Run PHPStan static analysis
-.\vendor\bin\phpstan analyse src --level=6
-
-# Run PHP CodeSniffer (PSR-12)
-.\vendor\bin\phpcs src --standard=PSR12
-```
-
-### Using Local Path Repository (for testing in another project)
-
-In your **other project's** `composer.json`:
-
-```json
-{
-    "repositories": [
-        {
-            "type": "path",
-            "url": "/path/to/econt-integration"
-        }
-    ],
-    "require": {
-        "vesselind/econt-integration": "*@dev"
-    }
-}
-```
-
-Then: `composer update vesselind/econt-integration`
-
-### Running Tests
-
-```bash
-# Install dependencies
-composer install
-
-# Run PHPUnit tests
+# Unit tests only (no network required)
 composer test
 
-# Run PHPStan static analysis
+# Integration tests (requires network access to demo.econt.com)
+php vendor/bin/phpunit --group integration
+
+# Static analysis (PHPStan level 6)
 composer phpstan
 
-# Run PHP CodeSniffer (PSR-12)
+# Code style check (PSR-12)
 composer phpcs
 ```
 
-### Testing Against Demo API
+> **Demo credentials** used in integration tests: `iasp-dev` / `1Asp-dev` against `https://demo.econt.com/ee/services`
 
-The library uses Econt's demo environment by default. Demo credentials:
-- **Username:** `iasp-dev`
-- **Password:** `1Asp-dev`
+---
 
-```php
-use Econt\EcontApi\Configuration\EcontConfiguration;
-use Econt\EcontApi\Client\EcontClient;
-use Econt\EcontApi\Service\OfficeService;
-use Symfony\Component\HttpClient\Psr18Client;
-use Symfony\Component\Serializer\Serializer;
-use Symfony\Component\Serializer\Encoder\XmlEncoder;
-use Symfony\Component\Serializer\Normalizer\ObjectNormalizer;
+## Project Structure
 
-$config = EcontConfiguration::demo();
-$httpClient = new Psr18Client();
-$serializer = new Serializer([new ObjectNormalizer()], [new XmlEncoder()]);
-$client = new EcontClient($config, $httpClient, $serializer);
+```
+src/
+├── EcontClient.php             # Main entry point
+├── EcontConfiguration.php      # Configuration (URL, credentials, language)
+├── Collection/                 # Typed iterable collections (CountryCollection, etc.)
+├── Enum/
+│   ├── ShipmentType.php
+│   └── TariffSubCode.php
+├── Exception/
+│   ├── EcontException.php      # Base exception
+│   ├── EcontApiException.php
+│   ├── EcontNetworkException.php
+│   └── EcontValidationException.php
+├── Http/
+│   ├── HttpAdapterInterface.php
+│   ├── SymfonyHttpAdapter.php  # Default adapter
+│   └── Psr18HttpAdapter.php    # PSR-18 adapter
+├── Model/
+│   ├── Location/               # Country, City, Street, Quarter, Address, ValidatedAddress
+│   ├── Office/                 # Office
+│   ├── Result/                 # PriceResult
+│   └── Shipment/               # ShippingLabel, ClientProfile, CourierRequest, etc.
+└── Service/
+    ├── AddressService.php
+    ├── OfficeService.php
+    └── ShipmentService.php
 
-$officeService = new OfficeService($client);
-
-// Test against real demo API
-$offices = $officeService->getOffices('Sofia', 'BG');
-
-foreach ($offices as $office) {
-    echo $office->getOfficeName() . "\n";
-}
+tests/
+├── Unit/                       # Mocked unit tests (64 tests)
+└── Integration/                # Live API tests (requires network)
 ```
 
-## API Endpoints
+---
 
-- **Demo:** `https://demo.econt.com/ee/services/`
-- **Production:** `https://ee.econt.com/services/`
+## Configuration Reference
+
+```php
+// Factory method for the demo/test endpoint (official demo credentials pre-filled)
+$config = EcontConfiguration::forDemo();
+
+// Override language or timeout while still targeting demo
+$config = EcontConfiguration::forDemo(language: 'bg', timeout: 10);
+
+// Full constructor for production
+$config = new EcontConfiguration(
+    username: 'your-username',
+    password: 'your-password',
+    baseUrl:  EcontConfiguration::PRODUCTION_URL,
+    timeout:  30,
+    language: 'bg'  // 'bg' (Bulgarian) or 'en' (English)
+);
+```
+
+| Constant | Value |
+|----------|-------|
+| `EcontConfiguration::PRODUCTION_URL` | `https://ee.econt.com/services` |
+| `EcontConfiguration::DEMO_URL` | `https://demo.econt.com/ee/services` |
+
+---
 
 ## License
 
-MIT
+MIT License. See [LICENSE](LICENSE) for details.
+

@@ -4,177 +4,127 @@ declare(strict_types=1);
 
 namespace Econt\EcontApi\Service;
 
-use Econt\EcontApi\Client\EcontClientInterface;
-use Econt\EcontApi\Model\Address\City;
-use Econt\EcontApi\Model\Address\Country;
-use Econt\EcontApi\Model\Address\Quarter;
-use Econt\EcontApi\Model\Address\Street;
-use Econt\EcontApi\Model\Response\EcontResponse;
-use Econt\EcontApi\Service\Contract\AddressServiceInterface;
+use Econt\EcontApi\Collection\CityCollection;
+use Econt\EcontApi\Collection\CountryCollection;
+use Econt\EcontApi\Collection\QuarterCollection;
+use Econt\EcontApi\Collection\StreetCollection;
+use Econt\EcontApi\Exception\EcontApiException;
+use Econt\EcontApi\Exception\EcontNetworkException;
+use Econt\EcontApi\Http\HttpAdapterInterface;
+use Econt\EcontApi\Model\Location\Address;
+use Econt\EcontApi\Model\Location\City;
+use Econt\EcontApi\Model\Location\Country;
+use Econt\EcontApi\Model\Location\Quarter;
+use Econt\EcontApi\Model\Location\Street;
+use Econt\EcontApi\Model\Location\ValidatedAddress;
 
-class AddressService implements AddressServiceInterface
+/**
+ * Service for address and nomenclature lookups.
+ */
+class AddressService
 {
-    private const SERVICE_COUNTRIES = 'Services.ExchangeRates.requestCountries';
-    private const SERVICE_CITIES = 'Services.ExchangeRates.requestCities';
-    private const SERVICE_STREETS = 'Services.ExchangeRates.requestStreets';
-    private const SERVICE_QUARTERS = 'Services.ExchangeRates.requestQuarters';
-
-    private EcontClientInterface $client;
-
-    public function __construct(EcontClientInterface $client)
-    {
-        $this->client = $client;
+    public function __construct(
+        private readonly HttpAdapterInterface $adapter,
+    ) {
     }
 
-    public function requestCountries(?string $countryCode = null): EcontResponse
+    /**
+     * Retrieve all countries available in the Econt system.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function getCountries(): CountryCollection
     {
-        $data = [];
-
-        if ($countryCode !== null) {
-            $data['country_code'] = $countryCode;
-        }
-
-        return $this->client->request(self::SERVICE_COUNTRIES, $data);
-    }
-
-    public function requestCities(string $countryCode, ?string $cityName = null, ?bool $onlyWithOffice = null): EcontResponse
-    {
-        $data = [
-            'country_code' => $countryCode,
-        ];
-
-        if ($cityName !== null) {
-            $data['name'] = $cityName;
-        }
-
-        if ($onlyWithOffice !== null) {
-            $data['only_with_office'] = $onlyWithOffice ? 'true' : 'false';
-        }
-
-        return $this->client->request(self::SERVICE_CITIES, $data);
-    }
-
-    public function requestStreets(string $cityId, ?string $streetName = null): EcontResponse
-    {
-        $data = [
-            'city_id' => $cityId,
-        ];
-
-        if ($streetName !== null) {
-            $data['name'] = $streetName;
-        }
-
-        return $this->client->request(self::SERVICE_STREETS, $data);
-    }
-
-    public function requestQuarters(string $cityId, ?string $quarterName = null): EcontResponse
-    {
-        $data = [
-            'city_id' => $cityId,
-        ];
-
-        if ($quarterName !== null) {
-            $data['name'] = $quarterName;
-        }
-
-        return $this->client->request(self::SERVICE_QUARTERS, $data);
-    }
-
-    public function getCountries(?string $countryCode = null): array
-    {
-        $response = $this->requestCountries($countryCode);
-
-        if (!$response->isSuccess()) {
-            return [];
-        }
-
-        $data = $response->getData();
-        if (!isset($data['countries']) || !is_array($data['countries'])) {
-            return [];
-        }
-
-        return array_map(
-            fn($item) => Country::fromArray($item),
-            $data['countries']
+        $response = $this->adapter->post(
+            'Nomenclatures/NomenclaturesService.getCountries.json',
+            ['GetCountriesRequest' => ''],
         );
-    }
 
-    public function getCities(string $countryCode, ?string $cityName = null, ?bool $onlyWithOffice = null): array
-    {
-        $response = $this->requestCities($countryCode, $cityName, $onlyWithOffice);
-
-        if (!$response->isSuccess()) {
-            return [];
-        }
-
-        $data = $response->getData();
-        if (!isset($data['cities']) || !is_array($data['cities'])) {
-            return [];
-        }
-
-        return array_map(
-            fn($item) => City::fromArray($item),
-            $data['cities']
+        $countries = array_map(
+            static fn (array $item): Country => Country::fromArray($item),
+            (array) ($response['countries'] ?? []),
         );
+
+        return new CountryCollection($countries);
     }
 
-    public function getStreets(string $cityId, ?string $streetName = null): array
+    /**
+     * Retrieve cities for a given country code (ISO 3166-1 alpha-3, e.g. "BGR").
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function getCities(string $countryCode): CityCollection
     {
-        $response = $this->requestStreets($cityId, $streetName);
-
-        if (!$response->isSuccess()) {
-            return [];
-        }
-
-        $data = $response->getData();
-        if (!isset($data['streets']) || !is_array($data['streets'])) {
-            return [];
-        }
-
-        return array_map(
-            fn($item) => Street::fromArray($item),
-            $data['streets']
+        $response = $this->adapter->post(
+            'Nomenclatures/NomenclaturesService.getCities.json',
+            ['countryCode' => $countryCode],
         );
-    }
 
-    public function getQuarters(string $cityId, ?string $quarterName = null): array
-    {
-        $response = $this->requestQuarters($cityId, $quarterName);
-
-        if (!$response->isSuccess()) {
-            return [];
-        }
-
-        $data = $response->getData();
-        if (!isset($data['quarters']) || !is_array($data['quarters'])) {
-            return [];
-        }
-
-        return array_map(
-            fn($item) => Quarter::fromArray($item),
-            $data['quarters']
+        $cities = array_map(
+            static fn (array $item): City => City::fromArray($item),
+            (array) ($response['cities'] ?? []),
         );
+
+        return new CityCollection($cities);
     }
 
-    public function getCountry(string $countryCode): ?Country
+    /**
+     * Retrieve streets for a given city ID.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function getStreets(int $cityId): StreetCollection
     {
-        $countries = $this->getCountries($countryCode);
+        $response = $this->adapter->post(
+            'Nomenclatures/NomenclaturesService.getStreets.json',
+            ['cityID' => (string) $cityId],
+        );
 
-        if (count($countries) === 0) {
-            return null;
-        }
+        $streets = array_map(
+            static fn (array $item): Street => Street::fromArray($item),
+            (array) ($response['streets'] ?? []),
+        );
 
-        return $countries[0];
+        return new StreetCollection($streets);
     }
 
-    public function getCity(string $countryCode, string $cityName): ?City
+    /**
+     * Retrieve quarters (neighbourhoods) for a given city ID.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function getQuarters(int $cityId): QuarterCollection
     {
-        $cities = $this->getCities($countryCode, $cityName);
+        $response = $this->adapter->post(
+            'Nomenclatures/NomenclaturesService.getQuarters.json',
+            ['cityID' => (string) $cityId],
+        );
 
-        if (count($cities) === 0) {
-            return null;
-        }
+        $quarters = array_map(
+            static fn (array $item): Quarter => Quarter::fromArray($item),
+            (array) ($response['quarters'] ?? []),
+        );
 
-        return $cities[0];
+        return new QuarterCollection($quarters);
+    }
+
+    /**
+     * Validate an address and return the resolved + validated result.
+     *
+     * @throws EcontApiException
+     * @throws EcontNetworkException
+     */
+    public function validateAddress(Address $address): ValidatedAddress
+    {
+        $response = $this->adapter->post(
+            'Nomenclatures/NomenclaturesService.validateAddress.json',
+            ['address' => $address->toArray()],
+        );
+
+        return ValidatedAddress::fromArray($response);
     }
 }

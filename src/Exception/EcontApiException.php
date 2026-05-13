@@ -4,36 +4,28 @@ declare(strict_types=1);
 
 namespace Econt\EcontApi\Exception;
 
+/**
+ * Thrown when the Econt API returns a business-level error response.
+ */
 class EcontApiException extends EcontException
 {
-    private ?string $errorCode;
-    private ?string $errorMessage;
-
     public function __construct(
-        ?string $errorCode = null,
-        ?string $errorMessage = null,
-        string $message = '',
+        string $message,
+        private readonly string $apiErrorCode = '',
+        private readonly string $apiErrorMessage = '',
         int $code = 0,
-        ?\Throwable $previous = null
+        ?\Throwable $previous = null,
     ) {
-        $this->errorCode = $errorCode;
-        $this->errorMessage = $errorMessage;
-
-        $fullMessage = $message;
-        if ($errorCode !== null || $errorMessage !== null) {
-            $fullMessage = trim(($errorCode ? "[{$errorCode}] " : '') . ($errorMessage ?: '') . ' ' . $message);
-        }
-
-        parent::__construct($fullMessage ?: 'Econt API error occurred', $code, $previous);
+        parent::__construct($message, $code, $previous);
     }
 
-    public function getErrorCode(): ?string
+    public function getApiErrorCode(): string
     {
-        return $this->errorCode;
+        return $this->apiErrorCode;
     }
 
-    public function getErrorMessage(): ?string
+    public function getApiErrorMessage(): string
     {
-        return $this->errorMessage;
+        return $this->apiErrorMessage;
     }
 }
