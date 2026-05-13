@@ -54,7 +54,7 @@ class EcontClient implements EcontClientInterface
 
     public function request(string $service, array $data = []): EcontResponse
     {
-        $xmlData = $this->arrayToXml($data);
+        $xmlData = $this->buildRequestXml($data);
 
         $request = $this->requestFactory->createRequest('POST', $this->configuration->getBaseUrl() . $service)
             ->withHeader('Content-Type', 'text/xml; charset=utf-8')
@@ -62,7 +62,7 @@ class EcontClient implements EcontClientInterface
 
         $request->getBody()->write($xmlData);
 
-        $this->logger->info("Econt API Request: {$service}", ['data' => $data]);
+        $this->logger->info("Econt API Request: {$service}", ['xml' => $xmlData]);
 
         try {
             $response = $this->httpClient->sendRequest($request);
@@ -90,9 +90,13 @@ class EcontClient implements EcontClientInterface
         return $this->serializer;
     }
 
-    private function arrayToXml(array $data, string $rootElement = 'request'): string
+    private function buildRequestXml(array $data): string
     {
-        $xml = new \SimpleXMLElement("<?xml version=\"1.0\" encoding=\"UTF-8\"?><{$rootElement}/>");
+        $xml = new \SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><request/>');
+
+        $xml->addChild('username', $this->configuration->getUsername());
+        $xml->addChild('password', $this->configuration->getPassword());
+        $xml->addChild('language', $this->configuration->getLanguage());
 
         $this->arrayToXmlRecursive($xml, $data);
 
@@ -102,7 +106,9 @@ class EcontClient implements EcontClientInterface
     private function arrayToXmlRecursive(\SimpleXMLElement $xml, array $data): void
     {
         foreach ($data as $key => $value) {
-            $key = $this->camelCaseToSnakeCase($key);
+            if (is_int($key)) {
+                continue;
+            }
 
             if (is_array($value)) {
                 $child = $xml->addChild($key);
@@ -127,16 +133,18 @@ class EcontClient implements EcontClientInterface
                 return EcontResponse::error('Invalid XML response received');
             }
 
-            $xml->registerXPathNamespace('e', 'http://econt.com/xml');
-
             $isSuccess = isset($xml->success) && ((string) $xml->success === 'true' || (string) $xml->success === '1');
             $errorMessage = isset($xml->error) ? (string) $xml->error : null;
             $errorCode = isset($xml->error_code) ? (string) $xml->error_code : null;
 
-            $data = $this->xmlToArray($xml);
-
-            if ($isSuccess && isset($xml->response_data)) {
+            $data = [];
+            if (isset($xml->response_data)) {
                 $data = $this->parseResponseData($xml->response_data);
+            } else {
+                $data = $this->xmlToArray($xml);
+                unset($data['success']);
+                unset($data['error']);
+                unset($data['error_code']);
             }
 
             return new EcontResponse($isSuccess, $errorMessage, $errorCode, $data);
@@ -151,8 +159,7 @@ class EcontClient implements EcontClientInterface
 
         foreach ($xml->children() as $child) {
             $name = $this->snakeCaseToCamelCase($child->getName());
-            $value = count($child->children()) > 0 ? $this->xmlToArray($child) : (string) $child;
-            $result[$name] = $value;
+            $result[$name] = $this->xmlToValue($child);
         }
 
         foreach ($xml->attributes() as $name => $value) {
@@ -172,8 +179,10 @@ class EcontClient implements EcontClientInterface
         $result = [];
 
         foreach ($responseData->children() as $child) {
-            $name = $this->snakeCaseToCamelCase($child->getName());
-            $result[$name] = $this->xmlToValue($child);
+            $childName = $child->getName();
+            $value = $this->xmlToValue($child);
+
+            $result[$this->snakeCaseToCamelCase($childName)] = $value;
         }
 
         return $result;
@@ -182,27 +191,49 @@ class EcontClient implements EcontClientInterface
     private function xmlToValue(\SimpleXMLElement $element): mixed
     {
         if (count($element->children()) === 0) {
-            $value = (string) $element;
-            if (is_numeric($value)) {
-                return strpos($value, '.') !== false ? (float) $value : (int) $value;
-            }
+            $value = trim((string) $element);
+
             if ($value === 'true') {
                 return true;
             }
             if ($value === 'false') {
                 return false;
             }
+
             return $value;
+        }
+
+        $childrenArray = [];
+        $hasNumericKeys = false;
+        $keyCount = 0;
+
+        foreach ($element->children() as $child) {
+            $childName = $child->getName();
+            $childValue = $this->xmlToValue($child);
+
+            if ($childName === 'item' && isset($child['key'])) {
+                $key = (string) $child['key'];
+                $childrenArray[$key] = $childValue;
+                $hasNumericKeys = true;
+            } else {
+                $childrenArray[$childName] = $childValue;
+            }
+            $keyCount++;
+        }
+
+        if ($hasNumericKeys && count($childrenArray) === $keyCount && $keyCount > 0) {
+            $values = array_values($childrenArray);
+            if (count($values) === $keyCount) {
+                return $values;
+            }
         }
 
         $result = [];
         foreach ($element->children() as $child) {
-            $name = $this->snakeCaseToCamelCase($child->getName());
-            $result[$name] = $this->xmlToValue($child);
-        }
+            $childName = $child->getName();
+            $value = $this->xmlToValue($child);
 
-        if ($element->getName() === 'item' && isset($element['key'])) {
-            return [$element['key'] => $result];
+            $result[$this->snakeCaseToCamelCase($childName)] = $value;
         }
 
         return $result;
