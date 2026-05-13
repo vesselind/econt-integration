@@ -1,0 +1,23 @@
+/vendor/
+/.phpunit.cache/
+/.idea/
+/.vscode/
+/tests/
+/.phpunit.result.cache
+/composer.lock
+/.specify/
+/.github/
+
+# Keep README.md and SPEC.md
+!README.md
+!SPEC.md
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# IDE
+*.sublime-*

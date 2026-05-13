@@ -1,0 +1,41 @@
+{
+    "name": "vesselind/econt-integration",
+    "description": "PHP library for Econt API integration - Bulgarian delivery company",
+    "type": "library",
+    "license": "MIT",
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "require": {
+        "php": ">=8.2",
+        "symfony/serializer": "^6.0|^7.0|^8.0",
+        "symfony/property-access": "^6.0|^7.0|^8.0",
+        "symfony/property-info": "^6.0|^7.0|^8.0",
+        "psr/http-client": "^1.0",
+        "psr/http-factory": "^1.0",
+        "psr/log": "^3.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.0|^11.0",
+        "phpstan/phpstan": "^1.10|^2.0",
+        "squizlabs/php_codesniffer": "^3.7",
+        "symfony/http-client": "^6.0|^7.0|^8.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Econt\\EcontApi\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Econt\\EcontApi\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "@php vendor/bin/phpunit",
+        "phpstan": "@php vendor/bin/phpstan analyse src --level=6",
+        "phpcs": "@php vendor/bin/phpcs src --standard=PSR12"
+    },
+    "config": {
+        "sort-packages": true
+    }
+}

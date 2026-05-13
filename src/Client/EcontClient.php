@@ -1,0 +1,233 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Econt\EcontApi\Client;
+
+use Econt\EcontApi\Configuration\EcontConfiguration;
+use Econt\EcontApi\Exception\EcontApiException;
+use Econt\EcontApi\Exception\EcontNetworkException;
+use Econt\EcontApi\Model\AbstractModel;
+use Econt\EcontApi\Model\Response\EcontResponse;
+use Psr\Http\Client\ClientInterface;
+use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\StreamFactoryInterface;
+use Psr\Log\LoggerInterface;
+use Psr\Log\NullLogger;
+use Symfony\Component\Serializer\SerializerInterface;
+
+class EcontClient implements EcontClientInterface
+{
+    private EcontConfiguration $configuration;
+    private ClientInterface $httpClient;
+    private RequestFactoryInterface $requestFactory;
+    private StreamFactoryInterface $streamFactory;
+    private SerializerInterface $serializer;
+    private LoggerInterface $logger;
+
+    public function __construct(
+        EcontConfiguration $configuration,
+        ClientInterface $httpClient,
+        RequestFactoryInterface $requestFactory,
+        StreamFactoryInterface $streamFactory,
+        SerializerInterface $serializer,
+        ?LoggerInterface $logger = null
+    ) {
+        $this->configuration = $configuration;
+        $this->httpClient = $httpClient;
+        $this->requestFactory = $requestFactory;
+        $this->streamFactory = $streamFactory;
+        $this->serializer = $serializer;
+        $this->logger = $logger ?? new NullLogger();
+    }
+
+    public function request(string $service, array $data = []): EcontResponse
+    {
+        $xmlData = $this->arrayToXml($data);
+
+        $request = $this->requestFactory->createRequest('POST', $this->configuration->getBaseUrl() . $service)
+            ->withHeader('Content-Type', 'text/xml; charset=utf-8')
+            ->withHeader('Accept', 'application/xml');
+
+        $request->getBody()->write($xmlData);
+
+        $this->logger->info("Econt API Request: {$service}", ['data' => $data]);
+
+        try {
+            $response = $this->httpClient->sendRequest($request);
+            $responseBody = (string) $response->getBody();
+
+            $this->logger->debug("Econt API Response: {$service}", ['response' => $responseBody]);
+
+            return $this->parseXmlResponse($responseBody);
+        } catch (\Psr\Http\Client\NetworkExceptionInterface $e) {
+            $this->logger->error("Econt Network Error: {$service}", ['exception' => $e->getMessage()]);
+            throw new EcontNetworkException('Network error occurred: ' . $e->getMessage(), 0, $e);
+        } catch (\Throwable $e) {
+            $this->logger->error("Econt Request Error: {$service}", ['exception' => $e->getMessage()]);
+            throw new EcontApiException(null, null, 'Request failed: ' . $e->getMessage(), 0, $e);
+        }
+    }
+
+    public function getConfiguration(): EcontConfiguration
+    {
+        return $this->configuration;
+    }
+
+    public function getSerializer(): SerializerInterface
+    {
+        return $this->serializer;
+    }
+
+    private function arrayToXml(array $data, string $rootElement = 'request'): string
+    {
+        $xml = new \SimpleXMLElement("<?xml version=\"1.0\" encoding=\"UTF-8\"?><{$rootElement}/>");
+
+        $this->arrayToXmlRecursive($xml, $data);
+
+        return $xml->asXML();
+    }
+
+    private function arrayToXmlRecursive(\SimpleXMLElement $xml, array $data): void
+    {
+        foreach ($data as $key => $value) {
+            $key = $this->camelCaseToSnakeCase($key);
+
+            if (is_array($value)) {
+                $child = $xml->addChild($key);
+                $this->arrayToXmlRecursive($child, $value);
+            } else {
+                $xml->addChild($key, htmlspecialchars((string) $value, ENT_XML1 | ENT_QUOTES, 'UTF-8'));
+            }
+        }
+    }
+
+    private function camelCaseToSnakeCase(string $input): string
+    {
+        return strtolower(preg_replace('/[A-Z]/', '_$0', lcfirst($input)));
+    }
+
+    private function parseXmlResponse(string $xmlString): EcontResponse
+    {
+        try {
+            $xml = @simplexml_load_string($xmlString);
+
+            if ($xml === false) {
+                return EcontResponse::error('Invalid XML response received');
+            }
+
+            $xml->registerXPathNamespace('e', 'http://econt.com/xml');
+
+            $isSuccess = isset($xml->success) && ((string) $xml->success === 'true' || (string) $xml->success === '1');
+            $errorMessage = isset($xml->error) ? (string) $xml->error : null;
+            $errorCode = isset($xml->error_code) ? (string) $xml->error_code : null;
+
+            $data = $this->xmlToArray($xml);
+
+            if ($isSuccess && isset($xml->response_data)) {
+                $data = $this->parseResponseData($xml->response_data);
+            }
+
+            return new EcontResponse($isSuccess, $errorMessage, $errorCode, $data);
+        } catch (\Throwable $e) {
+            return EcontResponse::error('Failed to parse response: ' . $e->getMessage());
+        }
+    }
+
+    private function xmlToArray(\SimpleXMLElement $xml): array
+    {
+        $result = [];
+
+        foreach ($xml->children() as $child) {
+            $name = $this->snakeCaseToCamelCase($child->getName());
+            $value = count($child->children()) > 0 ? $this->xmlToArray($child) : (string) $child;
+            $result[$name] = $value;
+        }
+
+        foreach ($xml->attributes() as $name => $value) {
+            $result[$this->snakeCaseToCamelCase($name)] = (string) $value;
+        }
+
+        return $result;
+    }
+
+    private function snakeCaseToCamelCase(string $input): string
+    {
+        return lcfirst(str_replace('_', '', ucwords($input, '_')));
+    }
+
+    private function parseResponseData(\SimpleXMLElement $responseData): array
+    {
+        $result = [];
+
+        foreach ($responseData->children() as $child) {
+            $name = $this->snakeCaseToCamelCase($child->getName());
+            $result[$name] = $this->xmlToValue($child);
+        }
+
+        return $result;
+    }
+
+    private function xmlToValue(\SimpleXMLElement $element): mixed
+    {
+        if (count($element->children()) === 0) {
+            $value = (string) $element;
+            if (is_numeric($value)) {
+                return strpos($value, '.') !== false ? (float) $value : (int) $value;
+            }
+            if ($value === 'true') {
+                return true;
+            }
+            if ($value === 'false') {
+                return false;
+            }
+            return $value;
+        }
+
+        $result = [];
+        foreach ($element->children() as $child) {
+            $name = $this->snakeCaseToCamelCase($child->getName());
+            $result[$name] = $this->xmlToValue($child);
+        }
+
+        if ($element->getName() === 'item' && isset($element['key'])) {
+            return [$element['key'] => $result];
+        }
+
+        return $result;
+    }
+
+    private function prepareRequestData(array $data): array
+    {
+        $result = [];
+
+        $result['JSONAttributes'] = [];
+        $result['saveResponse'] = 'true';
+
+        $requestData = [
+            'username' => $this->configuration->getUsername(),
+            'password' => $this->configuration->getPassword(),
+            'language' => $this->configuration->getLanguage(),
+        ];
+
+        foreach ($data as $key => $value) {
+            $requestData[$key] = $value;
+        }
+
+        $result['request'] = $requestData;
+
+        return $result;
+    }
+
+    private function serializeModel(AbstractModel $model): array
+    {
+        $array = $model->toArray();
+        $result = [];
+
+        foreach ($array as $key => $value) {
+            $result[$key] = $value;
+        }
+
+        return $result;
+    }
+}
